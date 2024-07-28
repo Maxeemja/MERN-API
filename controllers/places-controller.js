@@ -19,7 +19,7 @@ const getPlaceById = (req, res, next) => {
     res.json({place})
 }
 
-const getPlaceByUserId = (req, res, next) => {
+const getPlacesByUserId = (req, res, next) => {
     const uid = req.params.uid;
     const userPlaces = DUMMY_PLACES.filter(p => p.creator === uid);
     if (!userPlaces.length) {
@@ -53,4 +53,4 @@ const deletePlace = (req, res, next) => {
 }
 
 
-module.exports = {getPlaceById, getPlaceByUserId, createPlace, getPlaces, updatePlace, deletePlace};
+module.exports = {getPlaceById, getPlacesByUserId, createPlace, getPlaces, updatePlace, deletePlace};
