@@ -2,6 +2,7 @@ const HttpError = require("../models/http-error");
 const uuid = require("uuid");
 const { validationResult } = require("express-validator");
 const getCoordsForAddress = require("../util/location");
+const Place = require("../models/place");
 
 let DUMMY_PLACES = [
   {
@@ -20,22 +21,39 @@ let DUMMY_PLACES = [
 const getPlaces = (req, res, next) => {
   res.json({ DUMMY_PLACES });
 };
-const getPlaceById = (req, res, next) => {
+const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
-  const place = DUMMY_PLACES.find((p) => p.id === placeId);
-  if (!place) {
-    throw new HttpError("Could not find a place for provided id.", 404);
+  let place;
+  try {
+    place = await Place.findById(placeId);
+  } catch (e) {
+    const error = new HttpError("Failed to get place", 500);
+    return next(error);
   }
-  res.json({ place });
+
+  if (!place) {
+    return next(new HttpError("Could not find place for provided id.", 404));
+  }
+
+  res.json({ place: place.toObject({ getters: true }) });
 };
 
-const getPlacesByUserId = (req, res, next) => {
+const getPlacesByUserId = async (req, res, next) => {
   const uid = req.params.uid;
-  const userPlaces = DUMMY_PLACES.filter((p) => p.creator === uid);
+  let userPlaces;
+
+  try {
+    userPlaces = await Place.find({ creator: uid });
+  } catch (e) {
+    const error = new HttpError("Fetching failed.", 500);
+    return next(error);
+  }
+
   if (!userPlaces.length) {
     throw new HttpError("Could not find places for provided user id.", 404);
   }
-  res.json({ userPlaces });
+
+  res.json({ places: userPlaces.map((p) => p.toObject({ getters: true })) });
 };
 
 const createPlace = async (req, res, next) => {
@@ -53,17 +71,22 @@ const createPlace = async (req, res, next) => {
     return next(error);
   }
 
-  // const title = req.body.title;
-  const createdPlace = {
-    id: uuid.v4(),
+  const createdPlace = new Place({
     title,
     description,
-    location: coordinates,
+    image:
+      "https://cdn.britannica.com/73/114973-050-2DC46083/Midtown-Manhattan-Empire-State-Building-New-York.jpg",
     address,
+    location: coordinates,
     creator,
-  };
+  });
 
-  DUMMY_PLACES.push(createdPlace); //unshift(createdPlace)
+  try {
+    await createdPlace.save();
+  } catch (e) {
+    const error = new HttpError("Creating place failed", 500);
+    return next(error);
+  }
 
   res.status(201).json({ place: createdPlace });
 };

@@ -1,7 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const placesRoutes = require("./routers/places-routes");
-const usersRoutes = require("./routers/users-routes");
+const placesRoutes = require("./routes/places-routes");
+const usersRoutes = require("./routes/users-routes");
 const HttpError = require("./models/http-error");
 const mongoose = require("mongoose");
 require("dotenv").config();
@@ -30,7 +30,8 @@ mongoose
   .connect(process.env.MONGO_URL)
   .then(() => {
     console.log("Connected");
+    app.listen(5000);
   })
-  .catch();
-
-app.listen(5000);
+  .catch((err) => {
+    console.log(err);
+  });

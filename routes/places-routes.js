@@ -18,8 +18,6 @@ router.get("/user/:uid", getPlacesByUserId);
 
 router.post(
   "/",
-  check(["title", "description"]).not().isEmpty(),
-  check("address").not().isEmpty(),
   createPlace,
 );
 
