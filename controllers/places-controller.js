@@ -5,28 +5,21 @@ const getCoordsForAddress = require("../util/location");
 const Place = require("../models/place");
 const User = require("../models/user");
 
-let DUMMY_PLACES = [
-  {
-    id: "p1",
-    title: "EmpireStateBuilding",
-    description: "Some descr",
-    location: {
-      lat: 40.748,
-      long: -73.98715,
-    },
-    address: "20 W 34th Street, New York, NY 10001",
-    creator: "u1",
-  },
-];
-
-const getPlaces = (req, res, next) => {
-  res.json({ DUMMY_PLACES });
+const getPlaces = async (req, res, next) => {
+  let places;
+  try {
+    places = await Place.find();
+  } catch (e) {
+    const error = new HttpError("Failed to get places", 500);
+    return next(error);
+  }
+  res.json({ places: places.map((p) => p.toObject({ getters: true })) });
 };
 const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
   let place;
   try {
-    place = await Place.findById(placeId);
+    place = await Place.findById(placeId).populate("creator");
   } catch (e) {
     const error = new HttpError("Failed to get place", 500);
     return next(error);
@@ -41,22 +34,24 @@ const getPlaceById = async (req, res, next) => {
 
 const getPlacesByUserId = async (req, res, next) => {
   const uid = req.params.uid;
-  let userPlaces;
+  let userWithPlaces;
 
   try {
-    userPlaces = await Place.find({ creator: uid });
+    userWithPlaces = await User.findById(uid).populate("places");
   } catch (e) {
     const error = new HttpError("Fetching failed.", 500);
     return next(error);
   }
 
-  if (!userPlaces.length) {
+  if (!userWithPlaces || !userWithPlaces.places.length) {
     return next(
       new HttpError("Could not find places for provided user id.", 404),
     );
   }
 
-  res.json({ places: userPlaces.map((p) => p.toObject({ getters: true })) });
+  res.json({
+    places: userWithPlaces.places.map((p) => p.toObject({ getters: true })),
+  });
 };
 
 const createPlace = async (req, res, next) => {
@@ -106,8 +101,11 @@ const createPlace = async (req, res, next) => {
     await user.save({ session: sess });
     await sess.commitTransaction();
   } catch (e) {
-    const error = new HttpError("Creating place failed", 500);
-    return next(e);
+    const error = new HttpError(
+      "Session was not completed, creating place failed",
+      500,
+    );
+    return next(error);
   }
 
   res.status(201).json({ place: createdPlace });
@@ -141,10 +139,29 @@ const updatePlace = async (req, res, next) => {
 
 const deletePlace = async (req, res, next) => {
   const placeId = req.params.pid;
+  let place;
   try {
-    await Place.findByIdAndDelete(placeId);
+    place = await Place.findById(placeId).populate("creator");
   } catch (e) {
-    const error = new HttpError("Deleting place failed", 500);
+    const error = new HttpError("Fetching place failed", 500);
+    return next(error);
+  }
+
+  console.log(place);
+
+  if (!place) {
+    return next(new HttpError("Could not find place id", 404));
+  }
+
+  try {
+    const sess = await mongoose.startSession();
+    sess.startTransaction();
+    await Place.findByIdAndDelete(placeId);
+    place.creator.places.pull(place);
+    await place.creator.save({ session: sess });
+    await sess.commitTransaction();
+  } catch (e) {
+    const error = new HttpError(e, 500);
     return next(error);
   }
   res.json({ message: "Deleted place." });
